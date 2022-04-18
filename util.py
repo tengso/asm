@@ -8,6 +8,7 @@ from futu import SysConfig
 from futu import OpenQuoteContext, KLType, AuType, TradeDateMarket, RET_OK
 from futu import AuType
 
+import functools as ft
 
 # '/Users/song/PycharmProjectsSandbox/happyvalley/futu')
 
@@ -41,14 +42,18 @@ class FutuConfig:
     #     return self.is_encrypt
 
 
+@ft.lru_cache(maxsize=None)
 def get_corp_action(symbol):
     config = FutuConfig()
     context = OpenQuoteContext(host=config.get_host(), port=config.get_port())
     ret, data = context.get_rehab(symbol)
+    data['ex_div_date'] = pd.to_datetime(data['ex_div_date'])
+    data = data.set_index('ex_div_date').sort_index()
     context.close()
     return data
 
 
+@ft.lru_cache(maxsize=None)
 def get_kline(symbol, start_date, end_date, ktype=KLType.K_DAY, autype=AuType.NONE, max_count=None):
     config = FutuConfig()
     context = OpenQuoteContext(host=config.get_host(), port=config.get_port())
@@ -63,6 +68,7 @@ def get_kline(symbol, start_date, end_date, ktype=KLType.K_DAY, autype=AuType.NO
         raise Exception(f'failed to get kline for {symbol} from {start_date} to {end_date}: {data}')
 
 
+@ft.lru_cache(maxsize=None)
 def get_price(symbol, start_date, end_date, adjusted=True):
     if symbol.startswith('HK.'):
         prices = get_kline(symbol, start_date, end_date, autype=AuType.QFQ if adjusted else AuType.NONE)

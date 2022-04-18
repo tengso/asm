@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import futu
 import yfinance as yf
 import requests_cache
+import time
 
 session = requests_cache.CachedSession('yfinance.cache')
 
@@ -15,6 +16,7 @@ def get_bbg_port():
     prices = pd.read_csv('data/bbg.csv', delimiter='\t')
     prices['Date'] = pd.to_datetime(prices.Date)
     prices = prices.set_index('Date').sort_index()
+    prices = prices[~prices.index.duplicated(keep='first')]
     return prices
 
 
@@ -72,6 +74,76 @@ def download_prices(is_save_csv=False):
     return all_prices
 
 
+def compare_price():
+    start_date = datetime.date(2019, 1, 1)
+    end_date = datetime.date(2022, 4, 1, )
+    symbol = 'HK.00316'
+    price = util.get_price(symbol, start_date, end_date, adjusted=True)
+    price_raw = util.get_price(symbol, start_date, end_date, adjusted=False)
+    price.plot(color='blue', alpha=0.5)
+    price_raw.plot(color='red', alpha=0.5)
+    plt.show()
+
+    corp_action = util.get_corp_action(symbol)
+    corp_action['ex_div_date'] = pd.to_datetime(corp_action['ex_div_date'])
+    corp_action = corp_action.set_index('ex_div_date').sort_index()
+    corp_action['raw_price'] = price_raw
+    corp_action['price'] = price
+
+    corp_action['my_price'] = corp_action.backward_adj_factorA * corp_action.raw_price + corp_action.backward_adj_factorB
+    corp_action['2019'][['my_price', 'price', 'raw_price']]
+    corp_action[['my_price', 'price', 'raw_price']].tail()
+    corp_action['2019-01'].head()
+
+
+def download_corp_actions(symbols):
+    data = {}
+    for symbol in symbols:
+        print(symbol)
+        d = util.get_corp_action(symbol)
+        data[symbol] = d
+        time.sleep(1)
+    return data
+
+
+def compute_cash_div_yield(symbol, corp_action):
+    symbol = 'HK.00316'
+
+    start_date = datetime.date(2000, 1, 1)
+    end_date = datetime.date(2022, 4, 1, )
+
+    ca = util.get_corp_action(symbol)
+    # ca['2021']
+    raw_price = util.get_price(symbol, start_date, end_date, adjusted=False)
+
+    year_end_prices = {}
+    for year in range(raw_price.index.min().year, raw_price.index.max().year, 1):
+        year_end_prices[year] = raw_price[str(year)].tail(1).iloc[0]
+
+        # year_end_prices.append(raw_price[str(year)].tail(1))
+    year_end_prices = pd.Series(year_end_prices)
+    # year_end_prices['year'] = [date.year for date in year_end_prices.index]
+    # year_end_prices.head()
+
+    ca['price'] = raw_price
+    ca = ca.fillna(0)
+    # ca['div_yield'] = ca.per_cash_div / ca.price
+    ca['year'] = [date.year for date in ca.index]
+    # ca['annual_cash_div'] =
+    # ca['2018':][['per_cash_div', 'per_share_div_ratio', 'price', 'div_yield']]
+
+    yearly_cash_div = ca.groupby('year').per_cash_div.sum()
+    data = pd.DataFrame(dict(yearly_cash_div=yearly_cash_div, ye_price=year_end_prices))
+    data['annual_cash_div_yield'] = data.yearly_cash_div / data.ye_price
+
+    return data
+    # data.yearly_cash_div_yield.plot(kind='bar')
+    # data.yearly_div.plot(kind='bar')
+    # plt.show()
+
+    # ca['2021']
+
+# ch_stocks = [s for s in stocks if 'HK' not in s]
 # hk_stocks
 # ch_stocks
 
@@ -81,6 +153,13 @@ end_date = datetime.date(2022, 4, 1, )
 
 port = get_port()
 port_size = len(port.columns)
+
+hk_stocks = [s for s in port.columns if 'HK' in s]
+corp_action = download_corp_actions(hk_stocks)
+corp_action.keys()
+
+corp_action['HK.00316']
+bbg_port['HK.00316']
 
 bbg_port = get_bbg_port()
 bbg_port.columns = port.columns
